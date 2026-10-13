@@ -1,0 +1,54 @@
+## ==============================================================================
+## CONFIGURATION (variable.txt)
+## Note: All variable names and values are CASE-INSENSITIVE, EXCEPT custom
+## User-Agent strings in DESKTOP_USER_AGENTS & MOBILE_USER_AGENTS (sent as-is).
+
+## short link with slug define as treated as specific and if just without slung treated all slung of full links
+
+## special when browser render true referer not work so be careful
+##may include and exclude work with selective countries
+
+## ==============================================================================
+
+API_KEYS=081130f37f19d409c438e3b29a73421c
+
+LINKS=https://example.com/register?ref=mycode1,https://example.com/register?ref=mycode2
+
+DEVICE_TYPE=mobile{android{chrome,samsung,firefox},ios{safari,chrome}},desktop{windows{chrome,edge,firefox},mac{safari,chrome}}
+
+COUNTRY=include{us,gb,ca,de},exclude{it,fr}
+
+RESIDENTIAL=false
+
+BROWSER_RENDERING=true
+
+WORKER_COUNT_RANGE=5,7
+
+WORKER_GAP_RANGE=8,12
+
+CYCLE_INTERVAL_RANGE=50,70
+
+POST_RESPONSE_WAIT_RANGE=5,15
+
+SHORT_LINK_TEMPLATE=https://go.example.com/{slug}
+
+REFERRERS=none,https://www.google.com/,https://www.youtube.com/,https://x.com/
+
+BROWSER_NATIVE_RATIO=80
+
+DESKTOP_USER_AGENTS= case sensitive separate by comma,
+MOBILE_USER_AGENTS= case sensitive separate by comma,
+
+
+advance
+ROUTE_CHANGE_ON_UNAVAILABLE / COUNTRIES_ROUTE_CHANGE = false (both varible)
+
+ROUTE_CHANGE_ON_UNAVAILABLE=false
+use this variable
+
+TIER_RATIO=70.0, 25.0, 5.0
+for t1,t2,t3
+
+PARALLELBOT=true
+CYCLE_GAP=0.0
+LANGUAGE_ACCORDING_TO_IP=false
