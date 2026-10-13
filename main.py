@@ -61,6 +61,7 @@ def truncate_url(url: str, head_len: int = 18, tail_len: int = 14) -> str:
         return url
     return f"{url[:head_len]}...{url[-tail_len:]}"
 
+# Ratio: e.g. 80 means 80% native, 20% others
 def parse_native_ratio(var_name: str, default_pct: float = 80.0) -> float:
     raw = get_env(var_name)
     if not raw:
@@ -75,32 +76,6 @@ def parse_native_ratio(var_name: str, default_pct: float = 80.0) -> float:
         return min(1.0, max(0.0, val))
     except Exception:
         return default_pct / 100.0
-
-
-# ---------------------------------------------------------
-# Dynamic Tier Ratio Parser
-# ---------------------------------------------------------
-def parse_tier_ratio(var_name="TIER_RATIO", default=(70.0, 25.0, 5.0)):
-    raw = get_env(var_name)
-    if not raw:
-        return default
-    parts = [p.strip() for p in raw.split(",") if p.strip()]
-    try:
-        if len(parts) == 1:
-            t1 = float(parts[0])
-            rem = max(0.0, 100.0 - t1)
-            t2 = rem * (2.0 / 3.0)
-            t3 = rem * (1.0 / 3.0)
-            return (t1, t2, t3)
-        elif len(parts) >= 3:
-            return (float(parts[0]), float(parts[1]), float(parts[2]))
-        elif len(parts) == 2:
-            return (float(parts[0]), float(parts[1]), max(0.0, 100.0 - float(parts[0]) - float(parts[1])))
-    except ValueError:
-        pass
-    return default
-
-T1_RATIO, T2_RATIO, T3_RATIO = parse_tier_ratio("TIER_RATIO", (70.0, 25.0, 5.0))
 
 
 # =========================================================
@@ -618,6 +593,7 @@ def pick_browser_for_os(os_name: str, allowed_browsers: list, native_pct: float)
 
     native_name = NATIVE_BROWSER_MAP.get(os_name, "")
     
+    # If the native browser is in the user's allowed list
     if native_name and native_name in allowed_browsers:
         other_browsers = [b for b in allowed_browsers if b != native_name]
         if other_browsers and random.random() < native_pct:
@@ -626,6 +602,7 @@ def pick_browser_for_os(os_name: str, allowed_browsers: list, native_pct: float)
             return random.choice(other_browsers)
         return native_name
 
+    # If native not allowed or not specified, choose uniformly from configured
     return random.choice(allowed_browsers)
 
 
@@ -711,6 +688,7 @@ def resolve_cycle_ua(used_uas_in_cycle: set) -> tuple:
     chosen_os = random.choice(list(sub_os_dict.keys()))
     allowed_browsers = sub_os_dict.get(chosen_os, ["chrome"])
     
+    # Select browser according to 80% native vs other rule
     chosen_browser = pick_browser_for_os(chosen_os, allowed_browsers, NATIVE_RATIO)
 
     ua, label = "", ""
@@ -724,59 +702,27 @@ def resolve_cycle_ua(used_uas_in_cycle: set) -> tuple:
 
 
 # ---------------------------------------------------------
-# Full Datacenter Catalog & 3-Tier Classification
+# Country Include/Exclude Parser
 # ---------------------------------------------------------
-ALL_DATACENTER_NON_PREMIUM = [
-    ("AE", "United Arab Emirates"), ("AR", "Argentina"), ("AT", "Austria"),
-    ("AU", "Australia"), ("BE", "Belgium"), ("BG", "Bulgaria"),
-    ("BR", "Brazil"), ("CA", "Canada"), ("CH", "Switzerland"),
-    ("CL", "Chile"), ("CO", "Colombia"), ("CZ", "Czech Republic"),
-    ("DE", "Germany"), ("DK", "Denmark"), ("ES", "Spain"),
-    ("FI", "Finland"), ("FR", "France"), ("GB", "United Kingdom"),
-    ("GR", "Greece"), ("HK", "Hong Kong"), ("HR", "Croatia"),
-    ("HU", "Hungary"), ("ID", "Indonesia"), ("IE", "Ireland"),
-    ("IL", "Israel"), ("IN", "India"), ("IT", "Italy"),
-    ("JP", "Japan"), ("KR", "South Korea"), ("MX", "Mexico"),
-    ("MY", "Malaysia"), ("NL", "Netherlands"), ("NO", "Norway"),
-    ("NZ", "New Zealand"), ("PH", "Philippines"), ("PL", "Poland"),
-    ("PT", "Portugal"), ("RO", "Romania"), ("RS", "Serbia"),
-    ("SA", "Saudi Arabia"), ("SE", "Sweden"), ("SG", "Singapore"),
-    ("SK", "Slovakia"), ("TH", "Thailand"), ("TR", "Turkey"),
-    ("TW", "Taiwan"), ("UA", "Ukraine"), ("US", "United States"),
-    ("VN", "Vietnam"), ("ZA", "South Africa")
-]
-ALL_DATACENTER_NON_PREMIUM = sorted(ALL_DATACENTER_NON_PREMIUM, key=lambda x: x[1])
-
-DATACENTER_CODE_TO_NAME = {code.upper(): name for code, name in ALL_DATACENTER_NON_PREMIUM}
-DATACENTER_NAME_TO_CODE = {name.lower(): code.upper() for code, name in ALL_DATACENTER_NON_PREMIUM}
-
-TIER_1_CODES = {"US", "GB", "CA", "DE", "FR", "ES", "IT", "NL", "JP", "SG", "AU", "SE", "MX", "BR", "KR"}
-TIER_2_CODES = {"AE", "AR", "AT", "BE", "CH", "CL", "CO", "CZ", "DK", "FI", "HK", "IE", "IL", "IN", "NO", "NZ", "PL", "PT", "RO", "SA", "TR", "TW", "ZA"}
-TIER_3_CODES = {"BG", "GR", "HR", "HU", "ID", "MY", "PH", "RS", "SK", "TH", "UA", "VN"}
-
-def print_datacenter_countries_table():
-    print("+" + "-" * 76 + "+")
-    print(f"| {'ALL AVAILABLE DATACENTER COUNTRIES (FREE CREDIT)':^74} |")
-    print("+" + "-" * 37 + "+" + "-" * 38 + "+")
-    print(f"| {'Code  Full Name':<36} | {'Code  Full Name':<37} |")
-    print("+" + "-" * 37 + "+" + "-" * 38 + "+")
-
-    half = (len(ALL_DATACENTER_NON_PREMIUM) + 1) // 2
-    for i in range(half):
-        c1_code, c1_name = ALL_DATACENTER_NON_PREMIUM[i]
-        c1_str = f"[{c1_code}] {c1_name}"
-        if i + half < len(ALL_DATACENTER_NON_PREMIUM):
-            c2_code, c2_name = ALL_DATACENTER_NON_PREMIUM[i + half]
-            c2_str = f"[{c2_code}] {c2_name}"
-        else:
-            c2_str = ""
-        print(f"| {c1_str:<35} | {c2_str:<36} |")
-    print("+" + "-" * 76 + "+\n")
+TIER_TABLE = {
+    "T1": [
+        ("FR", "fr"), ("DE", "de"), ("NL", "nl"), ("ES", "es"),
+        ("IT", "it"), ("PL", "pl"), ("SE", "se"), ("BR", "br"),
+        ("KR", "kr"), ("TR", "tr"), ("VN", "vn"), ("ID", "id"),
+        ("CA", "ca"), ("JP", "jp"), ("SG", "sg")
+    ],
+    "T2": [
+        ("US", "us"), ("GB", "gb"), ("CZ", "cz"), ("RO", "ro"),
+        ("AE", "ae"), ("MX", "mx"), ("TH", "th"), ("PH", "ph")
+    ],
+    "T3": [
+        ("IN", "in"), ("SA", "sa"), ("HK", "hk"), ("TW", "tw")
+    ]
+}
 
 def parse_country_config(raw_cfg: str):
     inc = set()
     exc = set()
-    warnings = set()
     if not raw_cfg.strip():
         return inc, exc
 
@@ -785,115 +731,56 @@ def parse_country_config(raw_cfg: str):
         match = re.match(r"^(include|exclude)\{([^\}]+)\}$", token, re.IGNORECASE)
         if match:
             mode = match.group(1).lower()
-            items = [c.strip().lower() for c in match.group(2).split(",") if c.strip()]
-            for item in items:
-                resolved_code = item.upper()
-                if item.upper() in DATACENTER_CODE_TO_NAME:
-                    resolved_code = item.upper()
-                elif item in DATACENTER_NAME_TO_CODE:
-                    resolved_code = DATACENTER_NAME_TO_CODE[item]
-                else:
-                    warnings.add(resolved_code)
-
-                if mode == "include":
-                    inc.add(resolved_code)
-                else:
-                    exc.add(resolved_code)
+            codes = [c.strip().lower() for c in match.group(2).split(",") if c.strip()]
+            if mode == "include":
+                inc.update(codes)
+            else:
+                exc.update(codes)
         else:
-            items = [c.strip().lower() for c in token.split(",") if c.strip()]
-            for item in items:
-                resolved_code = item.upper()
-                if item.upper() in DATACENTER_CODE_TO_NAME:
-                    resolved_code = item.upper()
-                elif item in DATACENTER_NAME_TO_CODE:
-                    resolved_code = DATACENTER_NAME_TO_CODE[item]
-                else:
-                    warnings.add(resolved_code)
-                
-                inc.add(resolved_code)
+            codes = [c.strip().lower() for c in token.split(",") if c.strip()]
+            inc.update(codes)
 
     contradictions = inc.intersection(exc)
     if contradictions:
         print("\n" + "=" * 70)
         print(" [PINNED AUDIT ALERT] COUNTRY CONTRADICTION DETECTED!")
-        print(f" Overlapping countries in include & exclude: {sorted(list(contradictions))}")
-        print(" Included countries take precedence.")
+        print(f" Overlapping countries present in both include and exclude: {sorted(list(contradictions))}")
+        print(" Default Rule: Explicitly included countries take precedence.")
         print("=" * 70 + "\n")
         exc.difference_update(contradictions)
-
-    if warnings:
-        print("\n" + "!" * 70)
-        print(f" [WARNING] Unrecognized codes in config: {', '.join(sorted(list(warnings)))}")
-        print("!" * 70 + "\n")
 
     return inc, exc
 
 RAW_COUNTRY_CONF = get_env("COUNTRY", get_env("COUNTRIES", ""))
 INC_COUNTRIES, EXC_COUNTRIES = parse_country_config(RAW_COUNTRY_CONF)
-ROUTE_CHANGE_ON_UNAVAILABLE = parse_bool("ROUTE_CHANGE_ON_UNAVAILABLE", parse_bool("COUNTRIES_ROUTE_CHANGE", False))
 
-def build_datacenter_country_pools():
-    t1_pool, t2_pool, t3_pool = [], [], []
-    for code, name in ALL_DATACENTER_NON_PREMIUM:
-        if code in EXC_COUNTRIES:
-            continue
-        if INC_COUNTRIES and code not in INC_COUNTRIES:
-            continue
-        
-        entry = (code, code.lower(), name)
-        if code in TIER_1_CODES:
-            t1_pool.append(entry)
-        elif code in TIER_2_CODES:
-            t2_pool.append(entry)
-        else:
-            t3_pool.append(entry)
-    
-    return t1_pool, t2_pool, t3_pool
+def build_filtered_country_pools():
+    filtered = {"T1": [], "T2": [], "T3": []}
+    for tier, pairs in TIER_TABLE.items():
+        for code_upper, code_lower in pairs:
+            if EXC_COUNTRIES and (code_lower in EXC_COUNTRIES or code_upper.lower() in EXC_COUNTRIES):
+                continue
+            if INC_COUNTRIES and (code_lower not in INC_COUNTRIES and code_upper.lower() not in INC_COUNTRIES):
+                continue
+            filtered[tier].append((code_upper, code_lower))
+    return filtered
 
-VALID_T1, VALID_T2, VALID_T3 = build_datacenter_country_pools()
-TOTAL_VALID = len(VALID_T1) + len(VALID_T2) + len(VALID_T3)
+FILTERED_COUNTRIES = build_filtered_country_pools()
 
-def pick_datacenter_country(used_countries_in_cycle: set):
-    tiers = []
-    if VALID_T1: tiers.append(("T1", T1_RATIO, VALID_T1))
-    if VALID_T2: tiers.append(("T2", T2_RATIO, VALID_T2))
-    if VALID_T3: tiers.append(("T3", T3_RATIO, VALID_T3))
+def pick_country():
+    available_tiers = [t for t in ("T1", "T2", "T3") if FILTERED_COUNTRIES[t]]
+    if not available_tiers:
+        return "T2", "US", "us"
 
-    if tiers:
-        total_weight = sum(w for t, w, pool in tiers)
-        for _ in range(20):
-            roll = random.uniform(0, total_weight)
-            current = 0
-            for t_name, w, pool in tiers:
-                current += w
-                if roll <= current:
-                    c_up, c_low, name = random.choice(pool)
-                    if c_up not in used_countries_in_cycle or TOTAL_VALID <= len(used_countries_in_cycle):
-                        used_countries_in_cycle.add(c_up)
-                        return f"{t_name}-{c_up}", c_up, c_low
-                    break
-        
-        t_name, _, pool = tiers[-1]
-        c_up, c_low, _ = random.choice(pool)
-        used_countries_in_cycle.add(c_up)
-        return f"{t_name}-{c_up}", c_up, c_low
-
-    # If pool is empty (e.g. user set an unsupported code with no route change allowed)
-    if not ROUTE_CHANGE_ON_UNAVAILABLE:
-        if INC_COUNTRIES:
-            locked = sorted(list(INC_COUNTRIES))[0]
-            used_countries_in_cycle.add(locked)
-            return f"LOCKED-{locked}", locked, locked.lower()
-        return "UNSET", "", ""
-
-    # Route change fallback
-    fallback_pool = [(c, c.lower(), n) for c, n in ALL_DATACENTER_NON_PREMIUM if c not in EXC_COUNTRIES]
-    if fallback_pool:
-        c_up, c_low, _ = random.choice(fallback_pool)
-        used_countries_in_cycle.add(c_up)
-        return f"FALLBACK-{c_up}", c_up, c_low
-
-    return "DC", "US", "us"
+    roll = random.random()
+    if roll < 0.50 and FILTERED_COUNTRIES.get("T1"):
+        return "T1", *random.choice(FILTERED_COUNTRIES["T1"])
+    elif roll < 0.85 and FILTERED_COUNTRIES.get("T2"):
+        return "T2", *random.choice(FILTERED_COUNTRIES["T2"])
+    elif FILTERED_COUNTRIES.get("T3"):
+        return "T3", *random.choice(FILTERED_COUNTRIES["T3"])
+    t = random.choice(available_tiers)
+    return t, *random.choice(FILTERED_COUNTRIES[t])
 
 
 # ---------------------------------------------------------
@@ -1066,14 +953,8 @@ RESIDENTIAL = parse_bool("RESIDENTIAL", default=False)
 DEFAULT_REFERRERS = [
     "none",
     "https://www.google.com/",
-    "https://t.co/",
-    "https://www.facebook.com",
-    "https://www.instagram.com",
-    "https://www.linkedin.com",
-    "https://www.pinterest.com",
-    "https://www.reddit.com",
-    "https://www.youtube.com",
-    "https://www.tiktok.com"
+    "https://www.youtube.com/",
+    "https://t.co/"
 ]
 RAW_REFERRERS = parse_list("REFERRERS", DEFAULT_REFERRERS)
 REFERRERS = RAW_REFERRERS if RAW_REFERRERS else DEFAULT_REFERRERS
@@ -1094,32 +975,35 @@ def calculate_credits(render_flag: str, is_residential: bool) -> int:
 # ---------------------------------------------------------
 # Worker Bot Execution
 # ---------------------------------------------------------
-def execute_bot(bot_id: int, total_bots: int, target_url: str, slug: str, ltype: str, stagger_delay: float, selected_cat: str, selected_ua: str, os_label: str, tier_label: str, code_upper: str, code_lower: str):
+def execute_bot(bot_id: int, total_bots: int, target_url: str, slug: str, ltype: str, stagger_delay: float, selected_cat: str, selected_ua: str, os_label: str):
     time.sleep(stagger_delay)
 
     key_obj = pool.get_key()
     if not key_obj:
         return
 
+    tier, label, code = pick_country()
     expected_credits = calculate_credits(BROWSER_RENDERING, RESIDENTIAL)
     truncated_target = truncate_url(target_url, head_len=18, tail_len=14)
+
+    # ScraperAPI unique rotation seed to prevent IP reuse
     rotation_seed = random.randint(1000000, 9999999)
 
     params = {
         "api_key": key_obj.token,
         "device_type": selected_cat,
+        "country_code": code,
         "render": BROWSER_RENDERING,
         "keep_headers": "true",
         "session_number": str(rotation_seed),
         "url": target_url
     }
-    if code_upper:
-        params["country_code"] = code_upper.lower()
     if RESIDENTIAL:
         params["premium"] = "true"
 
     url = f"http://api.scraperapi.com?{urllib.parse.urlencode(params)}"
     
+    # Accurate browser client hints to prevent platforms flagging desktop
     headers = {
         "User-Agent": selected_ua,
         "Connection": "close"
@@ -1142,28 +1026,11 @@ def execute_bot(bot_id: int, total_bots: int, target_url: str, slug: str, ltype:
     try:
         with urllib.request.urlopen(req, timeout=65) as resp:
             actual_credits = resp.headers.get("sa-credit-cost", str(expected_credits))
-            
-            # Inspect proxy exit headers to detect silent upstream routing to US/NL/FR
-            exit_country = (
-                resp.headers.get("sa-proxy-country") 
-                or resp.headers.get("sa-country") 
-                or resp.headers.get("x-scraperapi-country") 
-                or ""
-            ).strip().upper()
-
-            # Strictly verify exit country if an explicit country was chosen
-            if INC_COUNTRIES and code_upper and exit_country and exit_country != code_upper:
-                print(
-                    f"[Bot-{bot_id}/{total_bots}] [GEO REJECTED] [Requested: {code_upper} | ScraperAPI returned: {exit_country}] "
-                    f"Traffic ignored to protect your stats. [Credits: ~{actual_credits}] [{key_obj.tag}]"
-                )
-            else:
-                country_tag = exit_country if exit_country else code_upper
-                print(
-                    f"[Bot-{bot_id}/{total_bots}] [{tier_label}-{country_tag}] [{selected_cat.upper()}:{os_label}] "
-                    f"[{ltype} {slug}] [Target: {truncated_target}] [Ref: {ref_display}] "
-                    f"[Credits: ~{actual_credits} cost] [{key_obj.tag}] -> HTTP {resp.status} OK"
-                )
+            print(
+                f"[Bot-{bot_id}/{total_bots}] [{tier}-{label}] [{selected_cat.upper()}:{os_label}] "
+                f"[{ltype} {slug}] [Target: {truncated_target}] [Ref: {ref_display}] "
+                f"[Credits: ~{actual_credits} cost] [{key_obj.tag}] -> HTTP {resp.status} OK"
+            )
 
     except urllib.error.HTTPError as e:
         raw_detail = e.read().decode("utf-8", errors="ignore")[:70].strip()
@@ -1191,8 +1058,6 @@ def main():
     print("      UNIVERSAL SCRAPER ENGINE RUNTIME            ")
     print("==================================================")
 
-    print_datacenter_countries_table()
-
     if not INPUT_LINKS:
         print("\n" + "!" * 70)
         print(" [CONFIG ERROR] NO TARGET LINKS DETECTED!")
@@ -1200,20 +1065,9 @@ def main():
         print("!" * 70 + "\n")
         sys.exit(1)
 
-    inc_display = ", ".join(sorted(list(INC_COUNTRIES))) if INC_COUNTRIES else "None (ALL allowed)"
-    exc_display = ", ".join(sorted(list(EXC_COUNTRIES))) if EXC_COUNTRIES else "None"
-    
-    print("---------------- COUNTRY CONFIGURATION -----------")
-    print(f"Included Countries      : {inc_display}")
-    print(f"Excluded Countries      : {exc_display}")
-    print(f"Working Datacenter Pool : {TOTAL_VALID} active (T1: {len(VALID_T1)} | T2: {len(VALID_T2)} | T3: {len(VALID_T3)})")
-    print(f"Tier Selection Ratios   : T1={T1_RATIO:.1f}% | T2={T2_RATIO:.1f}% | T3={T3_RATIO:.1f}%")
-    print(f"Route Change Fallback   : {ROUTE_CHANGE_ON_UNAVAILABLE} (Default: False)")
-    print("--------------------------------------------------")
-
     print(f"Total Active Keys       : {len(pool.active_keys)}")
     print(f"Browser Rendering       : {BROWSER_RENDERING}")
-    print(f"Residential Proxies     : {'ENABLED (premium=true)' if RESIDENTIAL else 'DISABLED (Standard DataCenter Free Credit)'}")
+    print(f"Residential Proxies     : {'ENABLED (premium=true)' if RESIDENTIAL else 'DISABLED (Standard DataCenter)'}")
     print(f"Est. Credits Per Hit    : ~{calculate_credits(BROWSER_RENDERING, RESIDENTIAL)} credits")
     print(f"Active Device Hierarchy : {DEVICE_TREE}")
     print(f"Native Browser Weight   : {int(NATIVE_RATIO * 100)}% Native / {int((1.0 - NATIVE_RATIO) * 100)}% Others")
@@ -1240,27 +1094,19 @@ def main():
             print(f"\n--- [Cycle #{cycle_num}] Starting {worker_count} bots | Target: {target_cycle_time:.1f}s | Active Keys: {len(pool.active_keys)} ---")
 
             tasks = LINK_DISPATCHER.generate_cycle_batch(worker_count)
-            
-            # Unique User Agents per cycle
+
+            # Assign unique User-Agents for each worker in this cycle
             used_uas_this_cycle = set()
             bot_ua_assignments = [resolve_cycle_ua(used_uas_this_cycle) for _ in range(worker_count)]
-            
-            # Unique Countries per cycle
-            used_countries_this_cycle = set()
-            bot_country_assignments = [pick_datacenter_country(used_countries_this_cycle) for _ in range(worker_count)]
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
                 futures = []
                 for idx, (url, slug, ltype) in enumerate(tasks):
                     stagger = idx * random.uniform(GAP_MIN, GAP_MAX)
-                    
                     cat, ua_str, ua_label = bot_ua_assignments[idx]
-                    tier_label, code_upper, code_lower = bot_country_assignments[idx]
-                    
                     futures.append(
                         executor.submit(
-                            execute_bot, idx + 1, worker_count, url, slug, ltype, stagger, 
-                            cat, ua_str, ua_label, tier_label, code_upper, code_lower
+                            execute_bot, idx + 1, worker_count, url, slug, ltype, stagger, cat, ua_str, ua_label
                         )
                     )
                 concurrent.futures.wait(futures)
