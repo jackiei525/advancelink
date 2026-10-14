@@ -1115,15 +1115,18 @@ def execute_bot(bot_id: int, total_bots: int, target_url: str, slug: str, ltype:
         "device_type": selected_cat,
         "render": BROWSER_RENDERING,
         "keep_headers": "true",
-        "session_number": str(rotation_seed),
         "follow_redirect": "true" if FOLLOW_REDIRECT else "false",
         "retry": "false",
         "url": target_url
     }
-    if code_upper:
-        params["country_code"] = code_upper.lower()
+
     if RESIDENTIAL:
         params["premium"] = "true"
+    else:
+        params["session_number"] = str(rotation_seed)
+
+    if code_upper:
+        params["country_code"] = code_upper.lower()
 
     url = f"http://api.scraperapi.com?{urllib.parse.urlencode(params)}"
     
