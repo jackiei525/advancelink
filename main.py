@@ -1058,6 +1058,7 @@ pool = KeyPoolManager(RAW_KEYS)
 PARALLELBOT = parse_bool("PARALLELBOT", default=True)
 CYCLE_GAP = parse_num("CYCLE_GAP", default=0.0)
 
+FOLLOW_REDIRECT = parse_bool("FOLLOW_REDIRECT", default=False)
 MATCH_IP_LANGUAGE = parse_bool("LANGUAGE_ACCORDING_TO_IP", default=False)
 WORKER_MIN, WORKER_MAX = parse_range("WORKER_COUNT_RANGE", 5, 7)
 GAP_MIN, GAP_MAX = parse_range("WORKER_GAP_RANGE", 8.0, 12.0)
@@ -1115,6 +1116,7 @@ def execute_bot(bot_id: int, total_bots: int, target_url: str, slug: str, ltype:
         "render": BROWSER_RENDERING,
         "keep_headers": "true",
         "session_number": str(rotation_seed),
+        "follow_redirect": "true" if FOLLOW_REDIRECT else "false",
         "retry": "false",
         "url": target_url
     }
@@ -1228,7 +1230,7 @@ def main():
     print(f"Tier Selection Ratios   : T1={T1_RATIO:.1f}% | T2={T2_RATIO:.1f}% | T3={T3_RATIO:.1f}%")
     print(f"Route Change Fallback   : {ROUTE_CHANGE_ON_UNAVAILABLE} (Default: False)")
     print("--------------------------------------------------")
-
+    print(f"Follow Redirects        : {FOLLOW_REDIRECT}")
     print(f"Total Active Keys       : {len(pool.active_keys)}")
     print(f"Parallel Bots Enabled   : {PARALLELBOT}")
     print(f"Browser Rendering       : {BROWSER_RENDERING}")
